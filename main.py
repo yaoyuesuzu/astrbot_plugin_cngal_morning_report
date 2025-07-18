@@ -4,6 +4,7 @@ import logging
 import asyncio
 import random
 import os
+import base64
 from datetime import datetime
 import astrbot.api.message_components as Comp
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
