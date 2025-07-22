@@ -1,6 +1,5 @@
 import httpx
 import json
-import logging
 import asyncio
 import random
 import os
@@ -9,6 +8,7 @@ from datetime import datetime
 import astrbot.api.message_components as Comp
 from astrbot.api.event import filter, AstrMessageEvent, MessageChain
 from astrbot.api.star import Context, Star, register
+from astrbot.api import logger
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import pytz
 
@@ -24,7 +24,6 @@ class CngalMorningReportPlugin(Star):
         super().__init__(context)
         self.base_url = "https://api.cngal.org"
         self.entry_page_url = "https://www.cngal.org/entries/index/"
-        self.logger = logging.getLogger("CngalMorningReportPlugin")
         self.cst_tz = pytz.timezone('Asia/Shanghai')
         self.context = context
 
@@ -32,12 +31,14 @@ class CngalMorningReportPlugin(Star):
         headers = { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36" }
         self.http_client = httpx.AsyncClient(timeout=30.0, verify=False, follow_redirects=True, headers=headers)
         
-        self.logger.info("CnGal每日晨报插件已成功加载 (关键词触发模式)喵~")
+        # 使用框架的 logger
+        logger.info("CnGal每日晨报插件已成功加载 (关键词触发模式)喵~")
 
     @filter.command("晨报", alias={"早报"})
     async def handle_morning_report_keyword(self, event: AstrMessageEvent):
         """处理晨报关键词，生成并发送报告"""
-        self.logger.info(f"在频道 {event.session_id} 检测到晨报指令，开始生成报告...")
+        # 使用框架的 logger
+        logger.info(f"在频道 {event.session_id} 检测到晨报指令，开始生成报告...")
         yield event.plain_result("收到喵！正在为主人准备今天的晨报，请稍等哦~")
         
         report_chains = [chain async for chain in self.generate_morning_report()]
@@ -80,7 +81,8 @@ class CngalMorningReportPlugin(Star):
                     if details:
                         yield await self._format_game_reply(details, is_recommend=True)
             except Exception as e:
-                self.logger.error(f"生成无发售日备选推荐失败: {e}")
+                # 使用框架的 logger
+                logger.error(f"生成无发售日备选推荐失败: {e}")
 
     def _parse_iso_datetime(self, date_string: str) -> datetime | None:
         if not date_string: return None
@@ -94,7 +96,7 @@ class CngalMorningReportPlugin(Star):
             aware_utc_dt = naive_dt.replace(tzinfo=pytz.utc)
             return aware_utc_dt
         except (ValueError, TypeError) as e:
-            self.logger.error(f"解析时间字符串 '{date_string}' 失败: {e}")
+            logger.error(f"解析时间字符串 '{date_string}' 失败: {e}")
             return None
 
     async def _get_todays_birthdays(self, month: int, day: int) -> list:
@@ -102,7 +104,8 @@ class CngalMorningReportPlugin(Star):
             params = {"month": month, "day": day}
             response = await self.http_client.get(f"{self.base_url}/api/entries/GetRoleBirthdaysByTime", params=params)
             return response.json() if response.status_code == 200 else []
-        except Exception as e: self.logger.error(f"API _get_todays_birthdays 失败: {e}"); return []
+        except Exception as e: 
+            logger.error(f"API _get_todays_birthdays 失败: {e}"); return []
 
     async def _get_todays_releases(self, year: int, month: int, day: int) -> list:
         try:
@@ -117,14 +120,16 @@ class CngalMorningReportPlugin(Star):
                 if publish_time_utc and publish_time_utc.astimezone(self.cst_tz).date() == now_date:
                     today_games.append(game)
             return today_games
-        except Exception as e: self.logger.error(f"API _get_todays_releases 失败: {e}"); return []
+        except Exception as e: 
+            logger.error(f"API _get_todays_releases 失败: {e}"); return []
     
     async def _get_all_game_names(self) -> list:
         url = f"{self.base_url}/api/entries/GetAllEntries/Game"
         try:
             response = await self.http_client.get(url, timeout=20)
             return response.json() if response.status_code == 200 else []
-        except Exception: self.logger.error(f"获取'Game'列表时发生错误"); return []
+        except Exception: 
+            logger.error(f"获取'Game'列表时发生错误"); return []
 
     async def _format_game_reply(self, details: dict, is_recommend: bool = False) -> list:
         message_chain = []
@@ -136,7 +141,7 @@ class CngalMorningReportPlugin(Star):
         
         text_lines = []
         if is_recommend:
-            text_lines.append(f"【人家猜主人会喜欢这个喵~】\n《{game_title}》")
+            text_lines.append(f"人家猜主人会喜欢这个喵~\n《{game_title}》")
         else:
              text_lines.append(f"《{game_title}》")
         
@@ -199,4 +204,4 @@ class CngalMorningReportPlugin(Star):
 
     async def terminate(self):
         await self.http_client.aclose()
-        self.logger.info("CnGal每日晨报插件已卸载。")
+        logger.info("CnGal每日晨报插件已卸载。")
